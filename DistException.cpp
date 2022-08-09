@@ -8,12 +8,12 @@
  *
  * @brief     The implementation file containing class implementing k-Wave distributed exceptions.
  *
- * @version   Version 1.0
+ * @version   Version 1.1
  *
  * @date      13 August    2020, 10:31 (created) \n
- *            22 August    2021, 17:37 (revised)
+ *            09 August    2022, 22:16 (revised)
  *
- * @copyright Copyright (C) 2021 SC\@FIT Research Group, Brno University of Technology, Brno, CZ.
+ * @copyright Copyright (C) 2022 SC\@FIT Research Group, Brno University of Technology, Brno, CZ.
  *
  */
 
@@ -42,11 +42,11 @@ std::map<DistException::ExceptionType, std::string> DistException::sExceptionTyp
  * Full Constructor
  */
 DistException::DistException(const ExceptionType type,
-                     const int           rank,
-                     const MPI::Comm&    comm,
-                     const ErrorCode     errorCode,
-                     const std::string&  errorMessage,
-                     const bool          deadlockMode)
+                             const int           rank,
+                             const MPI_Comm&     comm,
+                             const ErrorCode     errorCode,
+                             const std::string&  errorMessage,
+                             const bool          deadlockMode)
 : exception(),
   mExecptionType(type),
   mRank(rank),
@@ -57,10 +57,10 @@ DistException::DistException(const ExceptionType type,
   mDeadlockMode(deadlockMode)
 {
   // Initialize communicator name.
-  char commName[MPI::MAX_OBJECT_NAME];
+  char commName[MPI_MAX_OBJECT_NAME];
   int  commNameLength;
 
-  mComm.Get_name(commName, commNameLength);
+  MPI_Comm_get_name(mComm, commName, &commNameLength);
   mCommName = commName;
 }
 // end of Constructor.
@@ -74,18 +74,20 @@ DistException::DistException(const ExceptionType type,
                              const std::string&  errorMessage)
   : exception(),
     mExecptionType(type),
-    mRank(MPI::COMM_WORLD.Get_rank()),
-    mComm(MPI::COMM_WORLD),
+    mRank(MPI_UNDEFINED),
+    mComm(MPI_COMM_WORLD),
     mCommName(""),
     mErrorCode(errorCode),
     mErrorMessage(errorMessage),
     mDeadlockMode(false)
 {
+  MPI_Comm_rank(MPI_COMM_WORLD, &mRank);
+
   // Initialize communicator name.
-  char commName[MPI::MAX_OBJECT_NAME];
+  char commName[MPI_MAX_OBJECT_NAME];
   int  commNameLength;
 
-  mComm.Get_name(commName, commNameLength);
+  MPI_Comm_get_name(mComm, commName, &commNameLength);
   mCommName = commName;
 }
 // end of Simplified constructor.

@@ -8,12 +8,12 @@
  *
  * @brief     The header file containing a class responsible for checking errors in distributed programs.
  *
- * @version   Version 1.0
+ * @version   Version 1.1
  *
  * @date      11 August    2020, 11:27 (created) \n
- *            22 August    2021, 17:37 (revised)
+ *            09 August    2022, 14:45 (revised)
  *
- * @copyright Copyright (C) 2021 SC\@FIT Research Group, Brno University of Technology, Brno, CZ.
+ * @copyright Copyright (C) 2022 SC\@FIT Research Group, Brno University of Technology, Brno, CZ.
  *
  */
 
@@ -49,7 +49,7 @@
  *
  * This class uses its own communicator to prevent interference with other communications. This communicator is derived
  * from the one set by the init routine. The ranks has to have the same mapping between the monitored comm and
- * the internal communicator used for error message exchange. At the time being, only MPI::COMM_WORLD makes sense.
+ * the internal communicator used for error message exchange. At the time being, only MPI_COMM_WORLD makes sense.
  * Moreover, the class sets a new error handler for the protected communicator.
  */
 class ErrorChecker
@@ -75,8 +75,8 @@ class ErrorChecker
      * @param [in] timeout       - How long to wait for the others before a violent termination of possibly deadlocked
      *                             ranks. Default value is 10s.
      */
-    static void init(const MPI::Comm& protectedComm = MPI::COMM_WORLD,
-                     const double     timeout       = kDefaultTimeout);
+    static void init(const MPI_Comm& protectedComm = MPI_COMM_WORLD,
+                     const double     timeout      = kDefaultTimeout);
 
     /// Finalize the error checker and release all resources.
     static void finalize();
@@ -131,11 +131,11 @@ class ErrorChecker
          * @param [in] errorCode    - Error code.
          * @param [in] errorMessage - Error message.
          */
-        explicit Exception(const ExceptionType                type,
-                           const int                          rank,
-                           const MPI::Comm&                   comm,
-                           const DistException::ErrorCode     errorCode,
-                           const std::string&                 errorMessage)
+        explicit Exception(const ExceptionType            type,
+                           const int                      rank,
+                           const MPI_Comm&                comm,
+                           const DistException::ErrorCode errorCode,
+                           const std::string&             errorMessage)
           : DistException(type, rank, comm, errorCode, errorMessage)
         {};
     };// end of Exception
@@ -162,7 +162,7 @@ class ErrorChecker
      * @param [in,out] errorCode - Error code.
      * @param  ...               - Other parameters given by the MPI standard.
      */
-    static void mpiErrrorHandler(MPI::Comm& comm, int* errorCode, ...);
+    static void mpiErrrorHandler(MPI_Comm* comm, int* errorCode, ...);
 
     /**
      * @brief Send error data to the root of the communicators.
@@ -202,17 +202,17 @@ class ErrorChecker
     static constexpr unsigned int kNoRank = std::numeric_limits<unsigned int>::max();
 
     /// Protected communicator.
-    static MPI::Comm&     sProtectedComm;
+    static MPI_Comm       sProtectedComm;
     /// Communicator used to exchange errors.
-    static MPI::Intracomm sErrorExchangeComm;
+    static MPI_Comm       sErrorExchangeComm;
 
     /// MPI error handler.
-    static MPI::Errhandler sMpiErrorHandler;
+    static MPI_Errhandler sMpiErrorHandler;
 
     /// How long to wait before violent abort.
-    static double    sTimeout;
+    static double sTimeout;
     /// Local rank in both the protected and ErrorExchange communicator.
-    static int       sRank;
+    static int    sRank;
 };// Error checker
 //----------------------------------------------------------------------------------------------------------------------
 

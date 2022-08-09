@@ -8,8 +8,7 @@ This repository stores a new approach for exceptions handling in MPI application
 
 ## Compilation
 
-The code can be compiled with OpenMPI + GCC or Intel MPI. In both versions, support for C++ MPI
-interface is necessary.
+The code can be compiled with OpenMPI + GCC or Intel MPI. 
 
 ```bash
 make
