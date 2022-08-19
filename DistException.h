@@ -8,12 +8,12 @@
  *
  * @brief     The header file containing class implementing k-Wave distributed exceptions.
  *
- * @version   Version 1.0
+ * @version   Version 1.1
  *
  * @date      11 August    2020, 11:45 (created) \n
- *            22 August    2021, 17:37 (revised)
+ *            09 August    2022, 22:13 (revised)
  *
- * @copyright Copyright (C) 2021 SC\@FIT Research Group, Brno University of Technology, Brno, CZ.
+ * @copyright Copyright (C) 2022 SC\@FIT Research Group, Brno University of Technology, Brno, CZ.
  *
  */
 
@@ -83,7 +83,7 @@ class DistException : public std::exception
      */
     explicit DistException(const ExceptionType type,
                            const int           rank,
-                           const MPI::Comm&    comm,
+                           const MPI_Comm&     comm,
                            const ErrorCode     errorCode,
                            const std::string&  errorMessage,
                            const bool          deadlockMode = false);
@@ -115,7 +115,7 @@ class DistException : public std::exception
     /// Set faulty rank.
     virtual void               setRank(int rank)       noexcept { mRank = rank; };
     /// Get faulty communicator.
-    virtual const MPI::Comm&   getComm()         const noexcept { return mComm; };
+    virtual const MPI_Comm&    getComm()         const noexcept { return mComm; };
     /// Get faulty communicator name.
     virtual const std::string& getCommName()     const noexcept { return mCommName; };
 
@@ -136,19 +136,19 @@ class DistException : public std::exception
     static  std::map<ExceptionType, std::string> sExceptionTypeNames;
 
     /// Type of exception.
-    ExceptionType    mExecptionType;
+    ExceptionType   mExecptionType;
     /// Faulty rank. In deadlock mode this is the lowest faulty rank responsible for printing the error.
-    int              mRank;
+    int             mRank;
     /// Faulty communicator.
-    const MPI::Comm& mComm;
+    const MPI_Comm& mComm;
     /// Faulty communicator name.
-    std::string      mCommName;
+    std::string     mCommName;
     /// Error code.
-    ErrorCode        mErrorCode;
+    ErrorCode       mErrorCode;
     /// Error message.
-    std::string      mErrorMessage;
+    std::string     mErrorMessage;
     /// Deadlock mode - In this situation, mRank is responsible for printing errors and logs.
-    bool             mDeadlockMode;
+    bool            mDeadlockMode;
 };// end of DistException
 //----------------------------------------------------------------------------------------------------------------------
 

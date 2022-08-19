@@ -8,12 +8,12 @@
  *
  * @brief     Examples of the MPI Error Checker usage.
  *
- * @version   Version 1.0
+ * @version   Version 1.1
  *
  * @date      11 August    2020, 11:27 (created) \n
- *            22 August    2021, 17:37 (revised)
+ *            09 August    2022, 22:10 (revised)
  *
- * @copyright Copyright (C) 2021 SC\@FIT Research Group, Brno University of Technology, Brno, CZ.
+ * @copyright Copyright (C) 2022 SC\@FIT Research Group, Brno University of Technology, Brno, CZ.
  *
  */
 
@@ -28,12 +28,38 @@
 using namespace std;
 
 /**
+ * Get rank in the communicator.
+ * @param  [in] comm - MPI communicator.
+ * @return rank of the process in the communicator.
+ */
+int mpiGetCommRank(const MPI_Comm& comm)
+{
+  int rank = MPI_UNDEFINED;
+  MPI_Comm_rank(comm, &rank);
+  return rank;
+}// end of mpiGetCommRank
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * Get size of the communicator.
+ * @param  [in] comm - MPI communicator.
+ * @return size of the communicator.
+ */
+int mpiGetCommSize(const MPI_Comm& comm)
+{
+  int size = MPI_UNDEFINED;
+  MPI_Comm_size(comm, &size);
+  return size;
+}// end of mpiGetCommSize
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
  * Print out the ranks that are supposed to be faulty
  * @param [in] faultyRanks
  */
 void printFaultyRanks(const std::vector<int>& faultyRanks)
 {
-  if (MPI::COMM_WORLD.Get_rank() == 0)
+  if (mpiGetCommRank(MPI_COMM_WORLD) == 0)
   {
     cout << "Faulty ranks throwing exception: ";
     for (auto rank : faultyRanks)
@@ -52,7 +78,7 @@ void printFaultyRanks(const std::vector<int>& faultyRanks)
  */
 bool isFaulty(const std::vector<int>& faultyRanks)
 {
-  return (std::find(faultyRanks.begin(), faultyRanks.end(), MPI::COMM_WORLD.Get_rank()) != faultyRanks.end());
+  return (std::find(faultyRanks.begin(), faultyRanks.end(), mpiGetCommRank(MPI_COMM_WORLD)) != faultyRanks.end());
 }// end of isFaulty
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -64,7 +90,7 @@ void reportError(const DistException& distException)
 {
   if (distException.getDeadlockMode())
   {
-    if (MPI::COMM_WORLD.Get_rank() == distException.getRank())
+    if (mpiGetCommRank(MPI_COMM_WORLD) == distException.getRank())
     {
       cout << "Exception found under deadlock situation" << endl;
       cout << "Communicator:  " << distException.getCommName()       << endl;
@@ -75,7 +101,7 @@ void reportError(const DistException& distException)
   }
   else
   {
-    if (MPI::COMM_WORLD.Get_rank() == 0)
+    if (mpiGetCommRank(MPI_COMM_WORLD) == 0)
     {
       cout << "Exception found without deadlock" << endl;
       cout << "Communicator:  " << distException.getCommName()       << endl;
@@ -100,7 +126,7 @@ void reportError(const DistException& distException)
  */
 void example01(const std::vector<int>& faultyRanks)
 {
-  if (MPI::COMM_WORLD.Get_rank() == 0)
+  if (mpiGetCommRank(MPI_COMM_WORLD) == 0)
   {
     cout << "------------------ Handle exception std::runtime_error ------------------" << endl;
     printFaultyRanks(faultyRanks);
@@ -111,12 +137,12 @@ void example01(const std::vector<int>& faultyRanks)
     // If I'm a faulty rank, trow exception
     if (isFaulty(faultyRanks))
     {
-      throw std::runtime_error("Runtime error in rank "  + to_string(MPI::COMM_WORLD.Get_rank()));
+      throw std::runtime_error("Runtime error in rank "  + to_string(mpiGetCommRank(MPI_COMM_WORLD)));
     }
 
     // The rank exits the try block properly.
     ErrorChecker::setSuccess();
-    if (MPI::COMM_WORLD.Get_rank() == 0)
+    if (mpiGetCommRank(MPI_COMM_WORLD) == 0)
     {
       cout << "Successful computation" << endl;
     }
@@ -130,12 +156,12 @@ void example01(const std::vector<int>& faultyRanks)
 
       if (distException.getDeadlockMode())
       {
-        MPI::COMM_WORLD.Abort(int(distException.getErrorCode()));
+        MPI_Abort(MPI_COMM_WORLD, int(distException.getErrorCode()));
       }
       else
       {
         ErrorChecker::finalize();
-        MPI::Finalize();
+        MPI_Finalize();
         exit(int(distException.getErrorCode()));
       }
     }
@@ -154,7 +180,7 @@ void example01(const std::vector<int>& faultyRanks)
  */
 void example02(const std::vector<int>& faultyRanks)
 {
-  if (MPI::COMM_WORLD.Get_rank() == 0)
+  if (mpiGetCommRank(MPI_COMM_WORLD) == 0)
   {
     cout << "------------------ Handle exception MPI invalid rank ------------------" << endl;
     printFaultyRanks(faultyRanks);
@@ -167,12 +193,12 @@ void example02(const std::vector<int>& faultyRanks)
     {
       int x = 0;
       // Send to invalid rank 100
-      MPI::COMM_WORLD.Send(&x, 1, MPI::INT, 100, 0);
+      MPI_Send(&x, 1, MPI_INT, 100, 0, MPI_COMM_WORLD);
     }
 
     // The rank exits the try block properly.
     ErrorChecker::setSuccess();
-    if (MPI::COMM_WORLD.Get_rank() == 0)
+    if (mpiGetCommRank(MPI_COMM_WORLD) == 0)
     {
       cout << "Successful computation" << endl;
     }
@@ -186,12 +212,12 @@ void example02(const std::vector<int>& faultyRanks)
 
       if (distException.getDeadlockMode())
       {
-        MPI::COMM_WORLD.Abort(int(distException.getErrorCode()));
+        MPI_Abort(MPI_COMM_WORLD, int(distException.getErrorCode()));
       }
       else
       {
         ErrorChecker::finalize();
-        MPI::Finalize();
+        MPI_Finalize();
         exit(int(distException.getErrorCode()));
       }
     }
@@ -209,7 +235,7 @@ void example02(const std::vector<int>& faultyRanks)
  */
 void example03(const std::vector<int>& faultyRanks)
 {
-  if (MPI::COMM_WORLD.Get_rank() == 0)
+  if (mpiGetCommRank(MPI_COMM_WORLD) == 0)
   {
     cout << "------------------ Handle exception std::runtime_error under deadlock mode ------------------" << endl;
     printFaultyRanks(faultyRanks);
@@ -220,14 +246,14 @@ void example03(const std::vector<int>& faultyRanks)
     // If I'm a faulty rank, trow exception
     if (isFaulty(faultyRanks))
     {
-      throw std::runtime_error("Runtime error in rank "  + to_string(MPI::COMM_WORLD.Get_rank()));
+      throw std::runtime_error("Runtime error in rank "  + to_string(mpiGetCommRank(MPI_COMM_WORLD)));
     }
 
-    MPI::COMM_WORLD.Barrier();
+    MPI_Barrier(MPI_COMM_WORLD);
 
     // The rank exits the try block properly.
     ErrorChecker::setSuccess();
-    if (MPI::COMM_WORLD.Get_rank() == 0)
+    if (mpiGetCommRank(MPI_COMM_WORLD) == 0)
     {
       cout << "Successful computation" << endl;
     }
@@ -241,12 +267,12 @@ void example03(const std::vector<int>& faultyRanks)
 
       if (distException.getDeadlockMode())
       {
-        MPI::COMM_WORLD.Abort(int(distException.getErrorCode()));
+        MPI_Abort(MPI_COMM_WORLD, int(distException.getErrorCode()));
       }
       else
       {
         ErrorChecker::finalize();
-        MPI::Finalize();
+        MPI_Finalize();
         exit(int(distException.getErrorCode()));
       }
     }
@@ -259,9 +285,8 @@ void example03(const std::vector<int>& faultyRanks)
  */
 int main(int argc, char** argv)
 {
-
   // Init MPI and set the error handler
-  MPI::Init(argc, argv);
+  MPI_Init(&argc, &argv);
 
   // Initialize error checker. Since being a static class it should be done here.
   ErrorChecker::init();
@@ -274,29 +299,29 @@ int main(int argc, char** argv)
     case 1:
     // Throw and report std::runtime_error(), ranks 1 and 2;
     {
-       vector<int> ranks {1, 2};
-       example01(ranks);
-       break;
+      vector<int> ranks {1, 2};
+      example01(ranks);
+      break;
     }
 
     case 2:
     // Throw and report MPI error invalid rank, ranks 1 and 2;
     {
-       vector<int> ranks {1, 2};
-       example02(ranks);
-       break;
+      vector<int> ranks {1, 2};
+      example02(ranks);
+      break;
     }
 
     case 3:
     // Throw and report std::runtime_error() while the others wait in barrier, ranks 1 and 2;
     {
-       vector<int> ranks {1, 2};
-       example03(ranks);
-       break;
+      vector<int> ranks {1, 2};
+      example03(ranks);
+      break;
     }
   }
 
-  MPI::Finalize();
+  MPI_Finalize();
   return 0;
 }// end of main
 //----------------------------------------------------------------------------------------------------------------------

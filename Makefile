@@ -6,11 +6,11 @@
 # * @Email     jarosjir@fit.vutbr.cz
 # * @Comments  Linux makefile
 # * 
-# * @Tool        Version 1.0            
+# * @Tool        Version 1.1
 # * @Created     20 August    2021, 15:42
-# * @LastModif   22 August    2021, 20:54
+# * @LastModif   09 August    2022, 22:23
 # *
-# * @copyright Copyright (C) 2021 SC\@FIT Research Group,
+# * @copyright Copyright (C) 2022 SC\@FIT Research Group,
 # *            Brno University of Technology, Brno, CZ.
 # *
 # */

@@ -8,12 +8,12 @@
  *
  * @brief     The implementation file containing a class responsible for checking errors in distributed programs.
  *
- * @version   Version 1.0
+ * @version   Version 1.1
  *
  * @date      11 August    2020, 11:27 (created) \n
- *            22 August    2021, 17:37 (revised)
+ *            09 August    2022, 22:17 (revised)
  *
- * @copyright Copyright (C) 2021 SC\@FIT Research Group, Brno University of Technology, Brno, CZ.
+ * @copyright Copyright (C) 2022 SC\@FIT Research Group, Brno University of Technology, Brno, CZ.
  *
  */
 
@@ -28,11 +28,11 @@
 //------------------------------------------------- Initialization ---------------------------------------------------//
 //--------------------------------------------------------------------------------------------------------------------//
 
-MPI::Comm&      ErrorChecker::sProtectedComm     = MPI::COMM_SELF;
-MPI::Intracomm  ErrorChecker::sErrorExchangeComm = MPI::COMM_SELF;
-double          ErrorChecker::sTimeout           = kDefaultTimeout;
-int             ErrorChecker::sRank              = 0;
-MPI::Errhandler ErrorChecker::sMpiErrorHandler   = MPI::ERRORS_ARE_FATAL;
+MPI_Comm       ErrorChecker::sProtectedComm     = MPI_COMM_SELF;
+MPI_Comm       ErrorChecker::sErrorExchangeComm = MPI_COMM_SELF;
+double         ErrorChecker::sTimeout           = kDefaultTimeout;
+int            ErrorChecker::sRank              = 0;
+MPI_Errhandler ErrorChecker::sMpiErrorHandler   = MPI_ERRORS_ARE_FATAL;
 
 //--------------------------------------------------------------------------------------------------------------------//
 //------------------------------------------------- Public methods ---------------------------------------------------//
@@ -41,22 +41,22 @@ MPI::Errhandler ErrorChecker::sMpiErrorHandler   = MPI::ERRORS_ARE_FATAL;
 /**
  * Initialize the error checker.
  */
-void ErrorChecker::init(const MPI::Comm& protectedComm,
-                        const double     timeout)
+void ErrorChecker::init(const MPI_Comm& protectedComm,
+                        const double    timeout)
 {
   // Set protected communicator.
   sProtectedComm = protectedComm;
   // Set local rank.
-  sRank = sProtectedComm.Get_rank();
+  MPI_Comm_rank(sProtectedComm, &sRank);
 
   // Set error handler to the protected communicator. This must be handed over a member variable to keep it alive
   // for the whole live of the application.
-  sMpiErrorHandler = MPI::Comm::Create_errhandler(ErrorChecker::mpiErrrorHandler);
-  sProtectedComm.Set_errhandler(ErrorChecker::sMpiErrorHandler);
+  MPI_Comm_create_errhandler(ErrorChecker::mpiErrrorHandler, &sMpiErrorHandler);
+  MPI_Comm_set_errhandler(sProtectedComm, sMpiErrorHandler);
 
   // Create a copy of the communicator.
-  sErrorExchangeComm = sProtectedComm.Clone();
-  sErrorExchangeComm.Set_name("ErrorExchangeComm");
+  MPI_Comm_dup(sProtectedComm, &sErrorExchangeComm);
+  MPI_Comm_set_name(sErrorExchangeComm, "ErrorExchangeComm");
 
   // Set timeout.
   sTimeout = timeout;
@@ -68,7 +68,7 @@ void ErrorChecker::init(const MPI::Comm& protectedComm,
  */
 void ErrorChecker::finalize()
 {
-  sErrorExchangeComm.Free();
+  MPI_Comm_free(&sErrorExchangeComm);
 }//end of finalize
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -201,16 +201,19 @@ const DistException ErrorChecker::catchException(const std::exception& e)
 /**
  * MPI error handler.
  */
-void ErrorChecker::mpiErrrorHandler(MPI::Comm& comm, int* errorCode, ...)
+void ErrorChecker::mpiErrrorHandler(MPI_Comm* comm, int* errorCode, ...)
 {
-  int  errorMessageLength = MPI::MAX_ERROR_STRING;
+  int  errorMessageLength = MPI_MAX_ERROR_STRING;
   char errorMessage[errorMessageLength];
 
-  MPI::Get_error_string(*errorCode, errorMessage, errorMessageLength);
+  MPI_Error_string(*errorCode, errorMessage, &errorMessageLength);
+
+  int rank = MPI_UNDEFINED;
+  MPI_Comm_rank(*comm, &rank);
 
   throw DistException(DistException::ExceptionType::kMpi,
-                      comm.Get_rank(),
-                      comm,
+                      rank,
+                      *comm,
                       DistException::ErrorCode::kMpi,
                       std::string(errorMessage));
 
@@ -223,32 +226,39 @@ void ErrorChecker::mpiErrrorHandler(MPI::Comm& comm, int* errorCode, ...)
 void ErrorChecker::sendErrorData(const DistException& exception)
 {
   // We need to send three messages.
-  MPI::Request reqs[3];
+  MPI_Request reqs[3];
 
   const int exceptionType = int(exception.getType());
   const int errorCode     = int(exception.getErrorCode());
 
-      // Receive exception type and error code.
-  reqs[int(MpiTag::kExceptionType)] = sErrorExchangeComm.Isend(&exceptionType,
-                                                               1,
-                                                               MPI::INT,
-                                                               kRootRank,
-                                                               int(MpiTag::kExceptionType));
+  // Receive exception type and error code.
+  MPI_Isend(&exceptionType,
+            1,
+            MPI_INT,
+            kRootRank,
+            int(MpiTag::kExceptionType),
+            sErrorExchangeComm,
+            &reqs[int(MpiTag::kExceptionType)]);
 
-  reqs[int(MpiTag::kErrorCode)]     = sErrorExchangeComm.Isend(&errorCode,
-                                                               1,
-                                                               MPI::INT,
-                                                               kRootRank,
-                                                               int(MpiTag::kErrorCode));
+  MPI_Isend(&errorCode,
+            1,
+            MPI_INT,
+            kRootRank,
+            int(MpiTag::kErrorCode),
+            sErrorExchangeComm,
+            &reqs[int(MpiTag::kErrorCode)]);
 
 
-  reqs[int(MpiTag::kErrorString)]   = sErrorExchangeComm.Isend(exception.getErrorMessage().c_str(),
-                                                               exception.getErrorMessage().size() + 1, //final \0
-                                                               MPI::CHAR,
-                                                               kRootRank,
-                                                               int(MpiTag::kErrorString));
+  MPI_Isend(exception.getErrorMessage().c_str(),
+            exception.getErrorMessage().size() + 1, //final \0
+            MPI_CHAR,
+            kRootRank,
+            int(MpiTag::kErrorString),
+            sErrorExchangeComm,
+            &reqs[int(MpiTag::kErrorString)]);
 
-  MPI::Request::Waitall(3, reqs);
+
+  MPI_Waitall(3, reqs, MPI_STATUSES_IGNORE);
 }// end of sendErrorData
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -258,42 +268,52 @@ void ErrorChecker::sendErrorData(const DistException& exception)
 ErrorChecker::Exception ErrorChecker::receiveErrorData(const int faultyRank)
 {
   // We need to receive three messages.
-  MPI::Request reqs[3];
+  MPI_Request reqs[3];
 
   // Temporary variable for enum classes being transferred as ints.
   int exceptionType;
   int errorCode;
 
   // Receive exception type and error code.
-  reqs[int(MpiTag::kExceptionType)] = sErrorExchangeComm.Irecv(&exceptionType,
-                                                               1,
-                                                               MPI::INT,
-                                                               faultyRank,
-                                                               int(MpiTag::kExceptionType));
-  reqs[int(MpiTag::kErrorCode)]     = sErrorExchangeComm.Irecv(&errorCode,
-                                                               1,
-                                                               MPI::INT,
-                                                               faultyRank,
-                                                               int(MpiTag::kErrorCode));
+  MPI_Irecv(&exceptionType,
+            1,
+            MPI_INT,
+            faultyRank,
+            int(MpiTag::kExceptionType),
+            sErrorExchangeComm,
+            &reqs[int(MpiTag::kExceptionType)]);
+
+  MPI_Irecv(&errorCode,
+            1,
+            MPI_INT,
+            faultyRank,
+            int(MpiTag::kErrorCode),
+            sErrorExchangeComm,
+            &reqs[int(MpiTag::kErrorCode)]);
 
 
   // Receive error message.
   // Get size of the error message.
-  MPI::Status status;
-  sErrorExchangeComm.Probe(faultyRank, int(MpiTag::kErrorString), status);
+  MPI_Status status;
+  MPI_Probe(faultyRank, int(MpiTag::kErrorString), sErrorExchangeComm, &status);
 
   // Message length and the buffer for message
-  const int messageLenght = status.Get_count(MPI::CHAR);
+  int messageLenght;
+  MPI_Get_count(&status, MPI_CHAR, &messageLenght);
   char errorMessage[messageLenght];
 
   // Receive error message
-  reqs[int(MpiTag::kErrorString)] = sErrorExchangeComm.Irecv(errorMessage,
-                                                             messageLenght,
-                                                             MPI::CHAR,
-                                                             faultyRank,
-                                                             int(MpiTag::kErrorString));
+  MPI_Irecv(errorMessage,
+            messageLenght,
+            MPI_CHAR,
+            faultyRank,
+            int(MpiTag::kErrorString),
+            sErrorExchangeComm,
+            &reqs[int(MpiTag::kErrorString)]);
+
+
   // Wait for all messages.
-  MPI::Request::Waitall(3, reqs);
+  MPI_Waitall(3, reqs, MPI_STATUSES_IGNORE);
 
   return Exception(DistException::ExceptionType(exceptionType),
                    faultyRank,
@@ -313,11 +333,13 @@ ErrorChecker::Exception ErrorChecker::receiveErrorData(const int faultyRank)
  */
 int ErrorChecker::findLowestFaultyRank()
 {
-  const int commSize = sErrorExchangeComm.Get_size();
+  int commSize;
+  MPI_Comm_size(sErrorExchangeComm, &commSize);
+
 
   // Allocate requests and rankPool.
-  MPI::Request* sendReqs = new MPI::Request[commSize];
-  MPI::Request* recvReqs = new MPI::Request[commSize];
+  MPI_Request* sendReqs  = new MPI_Request[commSize];
+  MPI_Request* recvReqs  = new MPI_Request[commSize];
   unsigned int* rankPool = new unsigned int[commSize];
 
   // Fill rankPool to OK message.
@@ -327,41 +349,44 @@ int ErrorChecker::findLowestFaultyRank()
   // Since the messages are tiny, the eager protocol will be used and a buffered send will be used.
   for (int rank = 0; rank < commSize; rank++)
   {
-    sendReqs[rank] = sErrorExchangeComm.Isend(&sRank, 1, MPI::UNSIGNED, rank, int(MpiTag::kFindLowestRank));
+    MPI_Isend(&sRank, 1, MPI_UNSIGNED, rank, int(MpiTag::kFindLowestRank), sErrorExchangeComm, &sendReqs[rank]);
   }
 
   // Receive messages from faulty ranks. The good ones will either send OK or be deadlocked and won't send anything.
   for (int rank = 0; rank < commSize; rank++)
   {
-    recvReqs[rank] = sErrorExchangeComm.Irecv(&rankPool[rank], 1, MPI::UNSIGNED, rank, int(MpiTag::kFindLowestRank));
+    MPI_Irecv(&rankPool[rank], 1, MPI_UNSIGNED, rank, int(MpiTag::kFindLowestRank), sErrorExchangeComm, &recvReqs[rank]);
   }
 
   // Wait for a given time and test if all send the message.
-  bool completed = 0;
+  int completed = 0;
   double start = MPI_Wtime();
   while ((!completed) && ((MPI_Wtime() - start) < kDefaultTimeout))
   {
     // Busy wait
-    completed = MPI::Request::Testall(commSize, recvReqs);
+    MPI_Testall(commSize, recvReqs, &completed, MPI_STATUSES_IGNORE);
   }
 
   // Even if some of the messages haven't arrived, take a look a the data and find the lowest rank.
   // (min value in the array).
-  unsigned int lowestRank = *std::min_element(rankPool, rankPool + sErrorExchangeComm.Get_size());
+  unsigned int lowestRank = *std::min_element(rankPool, rankPool + commSize);
 
   // Although we're heading to MPI::Abort, it is nice to cancel not finished requests.
   for (int rank = 0; rank < commSize; rank++)
   {
     // Cancel not finished send requests - since the message is tiny, all are supposed to finish.
-    if (!sendReqs[rank].Test())
+    int commStatus;
+    MPI_Test(&sendReqs[rank], &commStatus, MPI_STATUSES_IGNORE);
+    if (!commStatus)
     {
-      sendReqs[rank].Cancel();
+      MPI_Cancel(&sendReqs[rank]);
     }
 
     // Cancel not finished receive requests.
-    if (!recvReqs[rank].Test())
+    MPI_Test(&recvReqs[rank], &commStatus, MPI_STATUSES_IGNORE);
+    if (!commStatus)
     {
-      recvReqs[rank].Cancel();
+      MPI_Cancel(&recvReqs[rank]);
     }
   }
 
